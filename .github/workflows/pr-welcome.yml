@@ -1,0 +1,57 @@
+name: 👋 PR Welcome
+
+on:
+  pull_request_target:
+    types:
+      - opened
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr-welcome-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post/update welcome guidance
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pr = context.payload.pull_request;
+            const marker = '<!-- pr-welcome-guide -->';
+
+            if (pr.user.type === 'Bot') return;
+
+            const body = `${marker}
+            ## 👋 Thanks for your Pull Request
+
+            This repository uses a **3-stage review pipeline**:
+
+            1. **Automated Validation** (DCO, PR checks, duplicate/slop checks, CI)
+            2. **Human Review** (NSOC reviewers/maintainers or approved GSSOC mentors)
+            3. **PA/Core Maintainer Review**
+
+            Please watch the **🚦 PR Review Pipeline** status comment for real-time stage updates.`;
+
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: pr.number,
+              per_page: 100
+            });
+
+            const existing = comments.data.find(c => c.user.type === 'Bot' && c.body?.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body });
+            }
