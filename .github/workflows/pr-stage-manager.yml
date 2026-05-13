@@ -14,8 +14,6 @@ on:
     types:
       - submitted
 
-actions: {}
-
 permissions:
   contents: read
   checks: read
