@@ -1350,7 +1350,7 @@
   // BACK TO TOP BUTTON
   // ══════════════════════════════════════════════
   const backToTopBtn = document.getElementById('backToTopBtn');
-  function updateBackToTopButton(){
+  function updateBackToTopButton() {
     if (!backToTopBtn) return;
     const shouldShow = window.scrollY > 300;
     backToTopBtn.classList.toggle('opacity-0', !shouldShow);
