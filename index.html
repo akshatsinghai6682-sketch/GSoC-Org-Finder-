@@ -2401,7 +2401,6 @@
   // ── renderWatchlist ─────────────────────────────────────────────────────────
   function renderWatchlist() {
     const container = document.getElementById('watchlistContainer');
-    const clearBtn  = document.getElementById('clearAllBookmarksBtn');
     const actionsDiv = document.getElementById('watchlistActions');
     if (!container) return;
 
@@ -2413,7 +2412,6 @@
 
     // Show / hide action buttons (Clear All, Export)
     if (actionsDiv) actionsDiv.classList.toggle('hidden', bookmarks.length === 0);
-    if (clearBtn) clearBtn.classList.toggle('hidden', bookmarks.length === 0);
 
     // ── Empty state ───────────────────────────────────────────────────────────
     if (bookmarks.length === 0) {
@@ -2579,7 +2577,7 @@
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function getWatchlistExportRows(bookmarks) {
