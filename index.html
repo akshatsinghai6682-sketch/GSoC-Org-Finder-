@@ -1135,9 +1135,10 @@
   type="button"
   class="
     fixed bottom-6 right-6 z-40 flex h-12 w-12 translate-y-2 items-center justify-center rounded-full
-    bg-primary text-white shadow-lg transition-all duration-200 hover:bg-primary-container
+    bg-primary text-white shadow-lg transition-all duration-200 hover:bg-primary/90
     focus:outline-none focus:ring-2 focus:ring-orange-400 opacity-0 pointer-events-none
   "
+  tabindex="-1"
   aria-label="Back to top"
   title="Back to top"
 >
@@ -1360,6 +1361,8 @@
     backToTopBtn.classList.toggle('opacity-0', !shouldShow);
     backToTopBtn.classList.toggle('pointer-events-none', !shouldShow);
     backToTopBtn.classList.toggle('translate-y-2', !shouldShow);
+    backToTopBtn.tabIndex = shouldShow ? 0 : -1;
+    backToTopBtn.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
   }
 
   if (backToTopBtn) {
