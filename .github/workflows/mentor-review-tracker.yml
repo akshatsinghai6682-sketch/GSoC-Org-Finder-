@@ -10,11 +10,13 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: mentor-review-${{ github.event.pull_request.number }}
+  group: mentor-review-${{ github.event.review.id }}
   cancel-in-progress: false
 
 jobs:
   track-review:
+    name: Track Mentor Review Activity
+
     runs-on: ubuntu-latest
 
     if: |
@@ -32,24 +34,62 @@ jobs:
         with:
           node-version: 22
 
+      # ----------------------------------------
+      # VALIDATE REVIEW STATE
+      # ----------------------------------------
+
+      - name: Validate review event
+        run: |
+          STATE="${{ github.event.review.state }}"
+
+          if [[ "$STATE" != "approved" && \
+                "$STATE" != "changes_requested" && \
+                "$STATE" != "commented" ]]; then
+            echo "Unsupported review state: $STATE"
+            exit 0
+          fi
+
+      # ----------------------------------------
+      # UPDATE MENTOR STATS
+      # ----------------------------------------
+
       - name: Update mentor statistics
         env:
           REVIEWER: ${{ github.event.review.user.login }}
+
           REVIEW_STATE: ${{ github.event.review.state }}
+
           REVIEW_ID: ${{ github.event.review.id }}
+
+          REVIEW_BODY: ${{ github.event.review.body }}
+
+          REVIEW_SUBMITTED_AT: ${{ github.event.review.submitted_at }}
+
           PR_NUMBER: ${{ github.event.pull_request.number }}
+
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+
         run: |
           node .github/scripts/update-mentor-stats.js
+
+      # ----------------------------------------
+      # COMMIT ONLY IF CHANGED
+      # ----------------------------------------
 
       - name: Commit updated stats
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add .github/reviewers/mentor-stats.json
 
           git diff --cached --quiet && exit 0
 
-          git commit -m "chore: update mentor review stats"
+          git commit -m \
+            "chore: update mentor review stats"
 
           git push
