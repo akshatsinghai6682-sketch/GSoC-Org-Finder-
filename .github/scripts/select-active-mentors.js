@@ -21,9 +21,18 @@ function daysSince(iso) {
 }
 
 const prAuthor = (process.env.PR_AUTHOR || '').toLowerCase();
-const existingRequested = new Set(JSON.parse(process.env.EXISTING_REQUESTED || '[]').map(v => String(v).toLowerCase()));
-const existingReviewers = new Set(JSON.parse(process.env.EXISTING_REVIEWERS || '[]').map(v => String(v).toLowerCase()));
-const recentPings = new Set(JSON.parse(process.env.RECENT_MENTOR_PINGS || '[]').map(v => String(v).toLowerCase()));
+function parseArrayEnv(name) {
+  try {
+    const v = JSON.parse(process.env[name] || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+const existingRequested = new Set(parseArrayEnv('EXISTING_REQUESTED').map(v => String(v).toLowerCase()));
+const existingReviewers = new Set(parseArrayEnv('EXISTING_REVIEWERS').map(v => String(v).toLowerCase()));
+const recentPings = new Set(parseArrayEnv('RECENT_MENTOR_PINGS').map(v => String(v).toLowerCase()));
 const maxReviewers = Math.max(1, toNum(process.env.MAX_REVIEWERS || 2));
 
 const mentors = (readJsonSafe(mentorsPath, { reviewers: [] }).reviewers || []).filter(Boolean);
