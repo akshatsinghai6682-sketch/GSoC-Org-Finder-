@@ -137,8 +137,14 @@ const scored = mentors.map((username) => {
   let inactivityPenalty = 0;
 
   if (neverReviewed) {
-    inactivityPenalty = 5;
+    inactivityPenalty = 0;
   } else {
+    inactivityPenalty =
+      Math.min(
+        40,
+        recencyDays * 0.8
+      );
+  }
     inactivityPenalty =
       Math.min(
         40,
