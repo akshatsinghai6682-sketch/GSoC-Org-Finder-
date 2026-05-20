@@ -1,33 +1,221 @@
 name: Issue Context Assignment
+
 on:
   issue_comment:
-    types: [created]
+    types:
+      - created
+
 permissions:
   issues: write
   contents: read
+
 concurrency:
   group: issue-assignment-${{ github.event.issue.number }}
   cancel-in-progress: false
+
 jobs:
   assign:
-    if: github.event.issue.pull_request == null && github.actor != 'github-actions[bot]'
+    if: |
+      github.event.issue.pull_request == null &&
+      github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/github-script@v8
         with:
           script: |
-            const comment = (context.payload.comment.body || '').trim();
-            if (!/^\/assign(\s+\w+)?$/i.test(comment)) return;
-            const owner=context.repo.owner, repo=context.repo.repo, issue_number=context.payload.issue.number;
-            const issue=(await github.rest.issues.get({owner,repo,issue_number})).data;
-            if (issue.state !== 'open' || issue.locked) return;
-            if ((issue.assignees || []).length > 0) return;
-            const claimant = context.payload.comment.user.login;
-            await github.rest.issues.addAssignees({owner,repo,issue_number,assignees:[claimant]});
-            const marker='<!-- assignment-status -->';
-            const body=`${marker}\n✅ Assigned to @${claimant}. One assignee maximum.`;
-            const {data: comments}=await github.rest.issues.listComments({owner,repo,issue_number,per_page:100});
-            const existing=comments.find(c=>c.body && c.body.includes(marker));
-            if (existing) await github.rest.issues.updateComment({owner,repo,comment_id:existing.id,body});
-            else await github.rest.issues.createComment({owner,repo,issue_number,body});
+            const comment =
+              (context.payload.comment.body || '').trim();
+
+            // ----------------------------------------
+            // VALIDATE COMMAND
+            // ----------------------------------------
+
+            if (!/^\/assign(\s+\w+)?$/i.test(comment)) {
+              return;
+            }
+
+            const owner =
+              context.repo.owner;
+
+            const repo =
+              context.repo.repo;
+
+            const issue_number =
+              context.payload.issue.number;
+
+            const claimant =
+              context.payload.comment.user.login;
+
+            // ----------------------------------------
+            // FETCH ISSUE
+            // ----------------------------------------
+
+            const issue = (
+              await github.rest.issues.get({
+                owner,
+                repo,
+                issue_number
+              })
+            ).data;
+
+            // ----------------------------------------
+            // ISSUE STATE CHECKS
+            // ----------------------------------------
+
+            if (
+              issue.state !== 'open' ||
+              issue.locked
+            ) {
+              core.info(
+                'Issue is closed or locked'
+              );
+
+              return;
+            }
+
+            // ----------------------------------------
+            // SINGLE ASSIGNEE GOVERNANCE
+            // ----------------------------------------
+
+            if (
+              (issue.assignees || []).length > 0
+            ) {
+              core.info(
+                'Issue already assigned'
+              );
+
+              return;
+            }
+
+            // ----------------------------------------
+            // APPROVAL / TRIAGE GATE
+            // ----------------------------------------
+
+            const labels =
+              (issue.labels || [])
+                .map(label =>
+                  typeof label === 'string'
+                    ? label.toLowerCase()
+                    : (label.name || '').toLowerCase()
+                );
+
+            const assignmentEligible =
+              labels.includes('stage-1-approved') ||
+              labels.includes('assignment-approved') ||
+              labels.includes('ready-for-assignment');
+
+            const marker =
+              '<!-- assignment-status -->';
+
+            // ----------------------------------------
+            // HELPER: UPSERT COMMENT
+            // ----------------------------------------
+
+            async function upsertComment(body) {
+
+              const comments =
+                await github.paginate(
+                  github.rest.issues.listComments,
+                  {
+                    owner,
+                    repo,
+                    issue_number,
+                    per_page: 100
+                  }
+                );
+
+              const existing =
+                comments.find(comment =>
+                  comment.body &&
+                  comment.body.includes(marker)
+                );
+
+              if (existing) {
+
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body
+                });
+
+                return;
+              }
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+            }
+
+            // ----------------------------------------
+            // BLOCK UNAPPROVED ASSIGNMENT
+            // ----------------------------------------
+
+            if (!assignmentEligible) {
+
+              await upsertComment(
+                [
+                  marker,
+                  '',
+                  '## ⛔ Assignment Pending Approval',
+                  '',
+                  `@${claimant} assignment is currently blocked because this issue has not passed triage/approval yet.`,
+                  '',
+                  'Assignment becomes available after maintainers or mentors apply one of the required approval labels:',
+                  '',
+                  '- `stage-1-approved`',
+                  '- `assignment-approved`',
+                  '- `ready-for-assignment`',
+                  '',
+                  'This prevents issue sniping and keeps contributor allocation fair.'
+                ].join('\n')
+              );
+
+              core.info(
+                'Assignment blocked due to missing approval label'
+              );
+
+              return;
+            }
+
+            // ----------------------------------------
+            // ASSIGN ISSUE
+            // ----------------------------------------
+
+            await github.rest.issues.addAssignees({
+              owner,
+              repo,
+              issue_number,
+              assignees: [claimant]
+            });
+
+            // ----------------------------------------
+            // SUCCESS COMMENT
+            // ----------------------------------------
+
+            await upsertComment(
+              [
+                marker,
+                '',
+                `## ✅ Issue Assigned`,
+                '',
+                `Assigned to @${claimant}.`,
+                '',
+                'Governance rules:',
+                '',
+                '- Only one active assignee is allowed',
+                '- Inactive assignments may be removed',
+                '- Work should begin only after assignment confirmation',
+                '- Spam/placeholder PRs may lose assignment priority'
+              ].join('\n')
+            );
+
+            core.info(
+              `Assigned issue #${issue_number} to ${claimant}`
+            );
